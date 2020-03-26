@@ -156,8 +156,8 @@ diff_genus <- function(obj, alpha=0.05) {
     theme(axis.text.x = element_text(angle = -90, hjust = 0, vjust=0.5))
 }
 
-genus_scale <- setNames(RColorBrewer::brewer.pal(dplyr::n_distinct(mcols(dds$base)$Genus), "Set1"),
-                        names(sort(table(mcols(dds$base)$Genus), decreasing=TRUE)))
+## genus_scale <- setNames(RColorBrewer::brewer.pal(dplyr::n_distinct(mcols(dds$base)$Genus), "Set1"),
+##                         names(sort(table(mcols(dds$base)$Genus), decreasing=TRUE)))
 
 stats <- map(dds, ~ table(sign(mcols(.)$log2FoldChange), mcols(.)$padj<param$get("alpha")))
 
