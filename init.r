@@ -22,10 +22,10 @@ tree <- phyloseq::read_tree("results/phylogenetic_tree/tree.nwk")
 
 samp <- openxlsx::read.xlsx("inst/extdata/DN19196_191024_M02212_0230_000000000-CN2NW.xlsx",
                            sheet=1, startRow=2, rowNames=TRUE)[c( "Sample.Name", "Sample.Treatment")] 
-samp$Number <-   sub(".*_", "", samp$Sample.Name)
+samp$Batch <-   sub(".*_00", "B", samp$Sample.Name)
 names(samp) <- sub("Sample\\.", "", names(samp))
 samp <- sample_data(samp[colnames(dat),])
 
 physeq <- phyloseq::phyloseq(dat, tax, tree, samp)
 
-usethis::use_data(physeq)
+usethis::use_data(physeq, overwrite=TRUE)
