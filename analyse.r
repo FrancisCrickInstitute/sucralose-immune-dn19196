@@ -13,6 +13,7 @@
 devtools::load_all()
 library(tidyverse)
 library(ggrepel)
+library(genefilter)
 library(xlsx)
 library(phyloseq)
 library(DESeq2)
@@ -36,13 +37,11 @@ knitr::opts_chunk$set(warning=FALSE, error=FALSE, message=FALSE,
 #+ aggregation, fig.cap=caption()
 data(physeq, package="babs16s")
 physeq <- list(base=physeq)
-physeq$treatment <- merge_samples(physeq$base, sample_data(physeq$base)$Treatment)
-descrip$treatment <- "Aggregated to treatments"
-physeq$batch <- merge_samples(physeq$base, sample_data(physeq$base)$Batch)
-descrip$batch <- "Aggregated to batches"
+descrip <- list(base="All samples separately")
+
 
 physeq$base_prop <- transform_sample_counts(physeq$base, function(OTU) OTU/sum(OTU)) # %>%
-descrip$treatment <- "Scaled within samples"
+descrip$base_prop <- "Scaled within samples"
 param$set("low_count", value=2, description="Low counts are &le;  {}")
 param$set("min_n_sample", value=3, description="Count must be be non-low in at least {} samples")
 
@@ -55,10 +54,11 @@ physeq$base <-  filter_taxa(physeq$base, filterfun(kOverA(k=param$get("min_n_sam
 #' 
 #+  alpha-diversity, fig.cap=caption()
 
-plot_richness(physeq$base, measures=c("Shannon", "Simpson"),  x="Treatment", color="Batch")
+
+plot_richness(physeq$base_prop, measures=c("Shannon", "Simpson"),  x="Treatment", color="Week")
 caption("Grouped by Treatment")
-plot_richness(physeq$base, measures=c("Shannon", "Simpson"),  color="Treatment", x="Batch")
-caption("Grouped by Batch")
+plot_richness(physeq$base_prop, measures=c("Shannon", "Simpson"),  color="Treatment", x="Week")
+caption("Grouped by Week")
 
 #' # Taxon proportions {.tabset}
 #'
@@ -77,20 +77,14 @@ stack_by <- function(agg, by, topk=5) {
   istop <- genefilter_sample(agg, filterfun_sample(topk(topk)), 1)
   agg <- merge_taxa(agg, which(!istop), 1)
   tax_table(agg)[which(!istop)[1], by] <- "Other"
-  print(plot_bar(agg, fill=by))
+  invisible(plot_bar(agg, fill=by, x="Mouse"))
 }
 
 
 for (i in rank_names(physeq$base)[-1]) {
   cat("\n\n## ", i, "\n", sep="")
-  stack_by(physeq$base, by=i, topk=param$get("topk"))
-  caption(paste0("Major ", i, " in raw samples"))
-  stack_by(physeq$base_prop, by=i, topk=param$get("topk"))
+  stack_by(physeq$base_prop, by=i, topk=param$get("topk")) + facet_grid(Week~Treatment, scales="free")
   caption(paste0("Major ", i, " in scaled samples"))
-  stack_by(physeq$treatment, by=i, topk=param$get("topk"))
-  caption(paste0("Major ", i, " in treatment groups"))
-  stack_by(physeq$batch, by=i, topk=param$get("topk")) 
-  caption(paste0("Major ", i, " in batches"))
 }
 
 #' # Ordination
@@ -102,7 +96,7 @@ for (i in rank_names(physeq$base)[-1]) {
 #+ ordination, fig.cap=caption()
 
 ord_nmds_bray <- ordinate(physeq$base_prop, method="NMDS", distance="bray", verbose=FALSE, trace=FALSE)
-pl <- plot_ordination(physeq$base_prop, ord_nmds_bray,  title="Bray NMDS", color="Treatment") +
+pl <- plot_ordination(physeq$base_prop, ord_nmds_bray,  title="Bray NMDS", color="Treatment", label="Batch") +
   coord_fixed()
 gg <- ggplot_build(pl)$layout$panel_params
 nmajor <- max(length(gg[[1]]$x.major_source), length(gg[[1]]$y.major.source))
@@ -114,8 +108,11 @@ pl <- pl + scale_x_continuous(breaks=scales::pretty_breaks(n=nmajor), labels=NUL
         plot.title = element_text(hjust = 0.5)
         )
 
-print(pl + aes(colour=Batch, shape=Treatment))
+print(pl + aes(colour=Week, shape=Treatment))
 caption("Bray distance, with an NMDS representation")
+print(pl + aes(colour=Batch, shape=Treatment))
+caption("Bray distance, with an NMDS representation, Batch pattern")
+
 
 
 #' # Differential analysis

@@ -4,8 +4,7 @@ module load Singularity/2.6.0-foss-2016b
 
 nextflow run nf-core/ampliseq \
 	 -profile crick \
-	 -resume \
-	 --reads "fastq" \
+	 --reads "fastq2" \
 	 --FW_primer CCTACGGGNGGCWGCAG \
 	 --RV_primer GACTACHVGGGTATCTAATCC \
 	 -c ampliseq.config \
