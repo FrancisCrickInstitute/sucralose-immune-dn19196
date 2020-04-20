@@ -1,3 +1,7 @@
+Version 0.2.0:
+ - Include both weeks' data in the analysis
+ - Remove unnecessary broken colour scale - points are text-labelled now instead
+
 Version 0.1.0
  - Prettier markdown and fix captioning
  - First version since ampliseq.nf worked
