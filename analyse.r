@@ -2,7 +2,7 @@
 #' title: "16S Analysis for Fabio Zani"
 #' author: "Gavin Kelly"
 #' output:
-#'   html_document2:
+#'   bookdown::html_document2:
 #'     toc: true
 #'     code_folding: hide
 #'     css: styles.css
@@ -36,16 +36,15 @@ knitr::opts_chunk$set(warning=FALSE, error=FALSE, message=FALSE,
 #' 
 #+ aggregation, fig.cap=caption()
 data(physeq, package="babs16s")
-physeq <- list(base=physeq)
-descrip <- list(base="All samples separately")
+physeq <- list(base=physeq, species=tax_glom(physeq, taxrank="Species"))
+descrip <- list(base="All samples separately", species="Compress equal species")
 
 
 physeq$base_prop <- transform_sample_counts(physeq$base, function(OTU) OTU/sum(OTU)) # %>%
 descrip$base_prop <- "Scaled within samples"
-param$set("low_count", value=2, description="Low counts are &le;  {}")
-param$set("min_n_sample", value=3, description="Count must be be non-low in at least {} samples")
+physeq$species_prop <- transform_sample_counts(physeq$species, function(OTU) OTU/sum(OTU)) # %>%
+descrip$base_prop <- "Scaled species-level samples"
 
-physeq$base <-  filter_taxa(physeq$base, filterfun(kOverA(k=param$get("min_n_sample"),A=param$get("low_count"))), TRUE)
 
 #' # Richness of samples per group
 #'
@@ -55,9 +54,9 @@ physeq$base <-  filter_taxa(physeq$base, filterfun(kOverA(k=param$get("min_n_sam
 #+  alpha-diversity, fig.cap=caption()
 
 
-plot_richness(physeq$base_prop, measures=c("Shannon", "Simpson"),  x="Treatment", color="Week")
+plot_richness(physeq$base, measures=c("Shannon", "Simpson"),  x="Treatment", color="Week")
 caption("Grouped by Treatment")
-plot_richness(physeq$base_prop, measures=c("Shannon", "Simpson"),  color="Treatment", x="Week")
+plot_richness(physeq$base, measures=c("Shannon", "Simpson"),  color="Treatment", x="Week")
 caption("Grouped by Week")
 
 #' # Taxon proportions {.tabset}
@@ -66,6 +65,11 @@ caption("Grouped by Week")
 #' big changes between samples, treatment groups and batches.
 #'
 #+ taxon-prop, fig.cap=caption()
+param$set("low_count", value=2, description="Low counts are &le;  {}")
+param$set("min_n_sample", value=3, description="Count must be be non-low in at least {} samples")
+
+physeq$base <-  filter_taxa(physeq$base, filterfun(kOverA(k=param$get("min_n_sample"),A=param$get("low_count"))), TRUE)
+physeq$species <-  filter_taxa(physeq$species, filterfun(kOverA(k=param$get("min_n_sample"),A=param$get("low_count"))), TRUE)
 param$set("topk", 5, "Each sample contributes {} OTUs")
 
 
@@ -83,9 +87,63 @@ stack_by <- function(agg, by, topk=5) {
 
 for (i in rank_names(physeq$base)[-1]) {
   cat("\n\n## ", i, "\n", sep="")
-  stack_by(physeq$base_prop, by=i, topk=param$get("topk")) + facet_grid(Week~Treatment, scales="free")
+  print(stack_by(physeq$base_prop, by=i, topk=param$get("topk")) + facet_grid(Week~Treatment, scales="free_x"))
   caption(paste0("Major ", i, " in scaled samples"))
 }
+
+#' # Taxon Abundances {.tabset}
+#'
+#' Similarly, for absolute abundances:
+#' 
+#+ taxon-abun, fig.cap=caption()
+
+
+for (i in rank_names(physeq$base)[-1]) {
+  cat("\n\n## ", i, "\n", sep="")
+  print(stack_by(physeq$base, by=i, topk=param$get("topk")) + facet_grid(Week~Treatment, scales="free_x"))
+  caption(paste0("Major ", i, " in samples"))
+}
+
+#' # Select Genera {.tabset}
+#'
+#' For the given the list of genera, here are there abundances:
+#'
+#+ paper-genera, fig.cap=caption()
+
+candidates <- list(
+  list(Family="Ruminococcaceae", Genus="Ruminococcus 1"),
+  list(Family="Lachnospiraceae", Genus="Roseburia"),
+  list(Family="Staphylococcaceae", Genus="Staphylococcus"),
+  list(Family="Clostridiaceae 1"),
+  list(Family="Bacillaceae", Genus="Pseudogracilibacillus"),
+  list(Family="Erysipelotrichaceae"),
+  list(Family="Christensenellaceae")
+)
+
+for (i in candidates) {
+  if ("Genus" %in% names(i)) {
+    name <- paste( i$Family, i$Genus)
+    ind <- subset_taxa(physeq$species, Family==i$Family & Genus==i$Genus)
+    
+  } else {
+    name <- paste( i$Family)
+    ind <- subset_taxa(physeq$species, Family==i$Family)
+  }
+  ind <- tax_glom(ind, "Genus")
+  cat("\n\n## ", name, "\n", sep="")
+  dat <- psmelt(ind) %>%
+    dplyr::mutate(Mouse=as.factor(Mouse),
+                  Week=factor(Week, levels=c("2","12"))
+                  )
+  pl <-   ggplot(dat, aes(x=Week, y=Abundance, group=Mouse, colour=Mouse)) +
+    geom_point() + geom_line() +
+    facet_grid(Genus~Treatment) +
+    guides(colour=FALSE, group=FALSE)
+  
+  print(pl + stat_summary(aes(group=Treatment), fun.y=mean, geom="line", colour="black"))
+  caption(name)
+}
+             
 
 #' # Ordination
 #'
@@ -107,6 +165,7 @@ pl <- pl + scale_x_continuous(breaks=scales::pretty_breaks(n=nmajor), labels=NUL
   theme(axis.ticks=element_blank(),
         plot.title = element_text(hjust = 0.5)
         )
+  
 
 print(pl + aes(colour=Week, shape=Treatment))
 caption("Bray distance, with an NMDS representation")
