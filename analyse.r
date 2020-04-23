@@ -135,13 +135,21 @@ for (i in candidates) {
     dplyr::mutate(Mouse=as.factor(Mouse),
                   Week=factor(Week, levels=c("2","12"))
                   )
+
   pl <-   ggplot(dat, aes(x=Week, y=Abundance, group=Mouse, colour=Mouse)) +
     geom_point() + geom_line() +
     facet_grid(Genus~Treatment) +
     guides(colour=FALSE, group=FALSE)
-  
   print(pl + stat_summary(aes(group=Treatment), fun.y=mean, geom="line", colour="black"))
   caption(name)
+
+    pl <-   ggplot(dat, aes(x=Treatment, y=Abundance)) +
+    geom_point() +
+    facet_grid(Genus~Week) +
+    guides(colour=FALSE, group=FALSE)
+  print(pl + stat_summary(aes(group=Week), fun.y=mean, geom="line", colour="black"))
+  caption(paste(name, " by week"))
+
 }
              
 
