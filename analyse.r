@@ -44,10 +44,47 @@ ind <- tt[,"Genus"] %in% names(which(apply(table( tt[,"Family"], tt[,"Genus"])!=
 tt[ind, "Genus"] <- paste(tt[ind, "Family"], tt[ind,"Genus"])
 tax_table(physeq) <- tt
 
+physeq %>%
+  tax_glom(taxrank="Species") %>%
+  psmelt() %>%
+  group_by(Sample.Name) %>%
+  mutate(`Relative Abundance`=Abundance/sum(Abundance), .after=Abundance) %>%
+  ungroup() %>%
+  write_csv("for_paper/Species_Mouse.csv")
+physeq %>%
+  tax_glom(taxrank="Genus") %>%
+  psmelt() %>%
+  group_by(Sample.Name) %>%
+  mutate(`Relative Abundance`=Abundance/sum(Abundance), .after=Abundance) %>%
+  ungroup() %>%
+  write_csv("for_paper/Genus_Mouse.csv")
 
+
+##  Aggregate across mice
 agg_mice <- merge_samples(physeq, "group")
-sample_data(agg_mice)$Treatment <- sample_data(physeq)[match(sample_names(agg_mice), sample_data(physeq)$group),"Treatment"]
-agg_mice <- tax_glom(agg_mice, taxrank="Genus")
+sample_data(agg_mice)$Treatment <- data.frame(sample_data(physeq))[match(sample_names(agg_mice), sample_data(physeq)$group),"Treatment"]
+sample_data(agg_mice)$Sample.Name <- sample_names(agg_mice)
+sample_data(agg_mice)$group <- NULL
+sample_data(agg_mice)$Batch <- NULL
+sample_data(agg_mice)$Mouse <- NULL
+
+agg_mice %>%
+  tax_glom(taxrank="Species") %>%
+  psmelt() %>%
+  group_by(Sample.Name) %>%
+  mutate(`Relative Abundance`=Abundance/sum(Abundance), .after=Abundance) %>%
+  ungroup() %>%
+  write_csv("for_paper/Species_Condition.csv")
+agg_mice %>%
+  tax_glom(taxrank="Genus") %>%
+  psmelt() %>%
+  group_by(Sample.Name) %>%
+  mutate(`Relative Abundance`=Abundance/sum(Abundance), .after=Abundance) %>%
+  ungroup() %>%
+  write_csv("for_paper/Genus_Condition.csv")
+
+
+
 
 ## Aggregate at each level
 aggs <- lapply(setNames(rank_names(physeq), rank_names(physeq))[2:6],
@@ -88,17 +125,14 @@ ddss <- lapply(aggs, function(phy) {
   )
 })
 
-df <- psmelt(agg_mice) %>%
-  select(-Sample.Name, -group, -Batch, -Mouse)
+df <- agg_mice %>%
+  tax_glom(taxrank="Genus") %>%
+  psmelt()
 
-#write_csv(df, path="grouped_genus.csv")
-#saveRDS(df, file="Grouped_genus.rds")
+################################################################
+#### Put in a nested order of total abundance
+################################################################
 
-#ind <- df$Genus %in% names(which(apply(table( df$Family, df$Genus)!=0, 2, sum)!=1))
-#df$Genus[ind] <- df$Family[ind]
-
-
-## Put in a nested order of total abundance
 df <- df %>%
   group_by(Phylum) %>% mutate(phylum=sum(Abundance)) %>%
   group_by(Class) %>% mutate(class=sum(Abundance)) %>%
@@ -119,8 +153,6 @@ df$Order <- factor(df$Order, levels=unique(df$Order))
 df$Family <- factor(df$Family, levels=unique(df$Family))
 df$Genus <- factor(df$Genus, levels=unique(df$Genus))
 
-
-#df <- df %>% pivot_wider(names_from=Week, values_from=Abundance, id_cols=-Sample)
 
 
 hier <- list(
@@ -158,6 +190,7 @@ hier <- list(
 
 ################################################################
 #### Within-treatment (12 vs 2 hour)
+################################################################
 
 add_lfc <- function(hierarchy, ddsList, ind) {
   my_hier <- list()
@@ -168,6 +201,7 @@ add_lfc <- function(hierarchy, ddsList, ind) {
     res <- dds$res[[j]][hierarchy[[lev]]$level,]
     these[[j]] <- cbind(hierarchy[[lev]],
                        lfc=res$log2FoldChange,
+                       padj=res$padj,
                        Treatment=as.character(dds$Treatment[j]),
                        Week=as.character(dds$Week[j])
                        )
@@ -180,31 +214,123 @@ add_lfc <- function(hierarchy, ddsList, ind) {
 
 per_treatment_df <- add_lfc(hier, ddss, "Within Treatment")
 
+pdf(file="for_paper/12_v_2_per_treatment.pdf")
 ggplot(per_treatment_df,
-       aes(xmin=running_Abundance-Abundance, xmax=running_Abundance,
+       aes(xmin=(running_Abundance-Abundance)/max(running_Abundance), xmax=running_Abundance/max(running_Abundance),
            ymin=as.integer(rank), ymax=as.integer(rank)+0.75, fill=lfc)) +
   geom_rect() +
   facet_wrap(~Treatment) + 
   scale_fill_gradient2(name="LFC 12 vs 2",limits=c(-5,5), oob=scales::squish) +
   scale_y_continuous(name=NULL,breaks=seq(1.375, 5.375,1), labels=levels(per_treatment_df$rank)) + 
   theme_bw() + theme(panel.grid=element_blank())
-  
+dev.off()
+
+per_treatment_df %>%
+  dplyr::select(-running_Abundance, -Week) %>%
+  write_csv("for_paper/12_v_2_per_treatment.csv")
+
   
 
 ################################################################
 #### Per week ( vs water)
+################################################################
 
 per_week_df <- add_lfc(hier, ddss, "Within Week")
 
+pdf(file="for_paper/X_v_water_per_week.pdf")
 ggplot(per_week_df,
-       aes(xmin=running_Abundance-Abundance, xmax=running_Abundance,
+       aes(xmin=(running_Abundance-Abundance)/max(running_Abundance), xmax=running_Abundance/max(running_Abundance),
            ymin=as.integer(rank), ymax=as.integer(rank)+0.75, fill=lfc)) +
   geom_rect() +
   facet_wrap(Week~Treatment) + 
   scale_fill_gradient2(name="LFC vs water",limits=c(-5,5), oob=scales::squish) +
   scale_y_continuous(name=NULL,breaks=seq(1.375, 5.375,1), labels=levels(per_week_df$rank)) + 
   theme_bw() + theme(panel.grid=element_blank())
-  
+dev.off()
+
+per_week_df %>%
+  dplyr::select(-running_Abundance) %>%
+  write_csv("for_paper/X_v_water_per_week.csv")
+
+################################################################
+
+
+#' # Ordination
+#'
+#' We want to be able to visualise the separation between samples. There are many
+#' different meanings of 'distance between two samples' and here we examine a few of
+#' them, and try to represent them as faithfully as possible in a two-dimensional figure.
+#' 
+#+ ordination, fig.cap=caption()
+
+col_scheme <- c(water= "grey", 
+               low_sucralose= "#ADD8E6",
+               high_sucralose = "#00008B",
+               glucose="#71bc78")
+
+regress <- function(phy, model) {
+  mat <- log(as.matrix(otu_table(phy))+0.1)
+  df <- sample_data(phy)[colnames(mat),]
+  for (i in 1:nrow(mat)) {
+    df$y <- as.vector(mat[i,rownames(df)])
+    fit <- lm(model, data=as.data.frame(unclass(df)))
+    mat[i,] <- mat[i,]-t(predict(fit, type="term", terms="Batch"))
+  }
+  mat <- round(exp(mat)-0.1)
+  otu_table(phy) <- otu_table(mat, taxa_are_rows = taxa_are_rows(phy))
+  phy
+}
+
+to2 <- function(phy) {
+  mat <- log(as.matrix(otu_table(phy))+0.1)
+  df <- sample_data(phy)[colnames(mat),]
+  is2 <- which(df$Week==2)
+  ind2 <- is2[match(df$Mouse, df$Mouse[is2])]
+  for (i in 1:nrow(mat)) {
+    mat[i,] <- mat[i,]/mat[i,ind2]
+  }
+  mat <- round(exp(mat)-0.1)
+  otu_table(phy) <- otu_table(mat, taxa_are_rows = taxa_are_rows(phy))
+  subset_samples(phy, df$Week==12)
+}
+    
+
+
+pdf(file="for_paper/ordination.pdf")
+for (i in rank_names(physeq)[2:6]) {
+  ord <- list(method="NMDS", distance="bray", level=i)
+  this_phy <- regress(aggs[[ord$level]], model=y~Treatment+Week+Batch)
+  sample_data(this_phy)$Week <- factor(sample_data(this_phy)$Week, levels=c("2","12"))
+  ord_obj <- ordinate(this_phy, method=ord$method, distance=ord$distance, trymax=1000)
+  pl <- plot_ordination(this_phy, ord_obj,  title=paste(ord, collapse=": "), color="Treatment") +
+    coord_fixed()
+  gg <- ggplot_build(pl)$layout$panel_params
+  nmajor <- max(length(gg[[1]]$x.major_source), length(gg[[1]]$y.major.source))
+  pl <- pl + scale_x_continuous(breaks=scales::pretty_breaks(n=nmajor), labels=NULL) +
+    scale_y_continuous(breaks=scales::pretty_breaks(n=nmajor), labels=NULL) +
+    labs(x="", y="") + theme_bw() + 
+    theme(axis.ticks=element_blank(),
+          plot.title = element_text(hjust = 0.5),
+#          text=element_text(family="TeXGyreHeros"),
+          legend.position="bottom"
+          ) + geom_point(size=3)
+  print(pl + facet_wrap(~Week) + scale_color_manual(values=col_scheme))
+}
+dev.off()
+
+
+
+
+
+print(pl + aes(colour=Batch, shape=Treatment))
+caption("Bray distance, with an NMDS representation, Batch pattern")
+
+
+
+
+
+################################################################
+#### END OF STUFF FOR PAPER
 ################################################################
 
 
@@ -326,75 +452,6 @@ for (i in candidates) {
 
 }
              
-
-#' # Ordination
-#'
-#' We want to be able to visualise the separation between samples. There are many
-#' different meanings of 'distance between two samples' and here we examine a few of
-#' them, and try to represent them as faithfully as possible in a two-dimensional figure.
-#' 
-#+ ordination, fig.cap=caption()
-
-col_scheme <- c(water= "grey", 
-               low_sucralose= "#ADD8E6",
-               high_sucralose = "#00008B",
-               glucose="#71bc78")
-
-regress <- function(phy, model) {
-  mat <- log(as.matrix(otu_table(phy))+0.1)
-  df <- sample_data(phy)[colnames(mat),]
-  for (i in 1:nrow(mat)) {
-    df$y <- as.vector(mat[i,rownames(df)])
-    fit <- lm(model, data=as.data.frame(unclass(df)))
-    mat[i,] <- mat[i,]-t(predict(fit, type="term", terms="Batch"))
-  }
-  mat <- round(exp(mat)-0.1)
-  otu_table(phy) <- otu_table(mat, taxa_are_rows = taxa_are_rows(phy))
-  phy
-}
-
-to2 <- function(phy) {
-  mat <- log(as.matrix(otu_table(phy))+0.1)
-  df <- sample_data(phy)[colnames(mat),]
-  is2 <- which(df$Week==2)
-  ind2 <- is2[match(df$Mouse, df$Mouse[is2])]
-  for (i in 1:nrow(mat)) {
-    mat[i,] <- mat[i,]/mat[i,ind2]
-  }
-  mat <- round(exp(mat)-0.1)
-  otu_table(phy) <- otu_table(mat, taxa_are_rows = taxa_are_rows(phy))
-  subset_samples(phy, df$Week==12)
-}
-    
-physeq$norm <- regress(physeq$species, model=y~Treatment+Week+Batch)
-physeq$to2 <- to2(physeq$species)
-
-
-
-ord <- list(method="MDS", distance="bray")
-this_phy <- subset_samples(physeq$species)
-this_phy <- subset_taxa(this_phy,  Genus!="Lachnospiraceae NK4A136 group")
-ord_obj <- ordinate(this_phy, method=ord$method, distance=ord$distance)
-pl <- plot_ordination(this_phy, ord_obj,  title=paste(ord, collapse=": "), color="Treatment") +
-  coord_fixed()
-gg <- ggplot_build(pl)$layout$panel_params
-nmajor <- max(length(gg[[1]]$x.major_source), length(gg[[1]]$y.major.source))
-pl <- pl + scale_x_continuous(breaks=scales::pretty_breaks(n=nmajor), labels=NULL) +
-  scale_y_continuous(breaks=scales::pretty_breaks(n=nmajor), labels=NULL) +
-  labs(x="", y="") + theme_bw() + 
-  theme(axis.ticks=element_blank(),
-        plot.title = element_text(hjust = 0.5),
-        text=element_text(family="TeXGyreHeros")
-        ) + geom_point(size=3)
-print(pl + facet_wrap(~Week) + scale_color_manual(values=col_scheme))
-caption(paste0(ord$distance, "distance, with an ", ord$method, " representation"))
-
-
-
-
-
-print(pl + aes(colour=Batch, shape=Treatment))
-caption("Bray distance, with an NMDS representation, Batch pattern")
 
 
 
