@@ -44,21 +44,16 @@ ind <- tt[,"Genus"] %in% names(which(apply(table( tt[,"Family"], tt[,"Genus"])!=
 tt[ind, "Genus"] <- paste(tt[ind, "Family"], tt[ind,"Genus"])
 tax_table(physeq) <- tt
 
-physeq %>%
-  tax_glom(taxrank="Species") %>%
-  psmelt() %>%
-  group_by(Sample.Name) %>%
-  mutate(`Relative Abundance`=Abundance/sum(Abundance), .after=Abundance) %>%
-  ungroup() %>%
-  write_csv("for_paper/Species_Mouse.csv")
-physeq %>%
-  tax_glom(taxrank="Genus") %>%
-  psmelt() %>%
-  group_by(Sample.Name) %>%
-  mutate(`Relative Abundance`=Abundance/sum(Abundance), .after=Abundance) %>%
-  ungroup() %>%
-  write_csv("for_paper/Genus_Mouse.csv")
-
+lapply(setNames(rank_names(physeq), rank_names(physeq))[2:6],
+       function(trank) {
+         physeq %>%
+           tax_glom(taxrank=trank) %>%
+           psmelt() %>%
+           group_by(Sample.Name) %>%
+           mutate(`Relative Abundance`=Abundance/sum(Abundance), .after=Abundance) %>%
+           ungroup() %>%
+           write_csv(paste0("for_paper/", trank, "_Mouse.csv"))
+       })
 
 ##  Aggregate across mice
 agg_mice <- merge_samples(physeq, "group")
@@ -68,22 +63,16 @@ sample_data(agg_mice)$group <- NULL
 sample_data(agg_mice)$Batch <- NULL
 sample_data(agg_mice)$Mouse <- NULL
 
-agg_mice %>%
-  tax_glom(taxrank="Species") %>%
-  psmelt() %>%
-  group_by(Sample.Name) %>%
-  mutate(`Relative Abundance`=Abundance/sum(Abundance), .after=Abundance) %>%
-  ungroup() %>%
-  write_csv("for_paper/Species_Condition.csv")
-agg_mice %>%
-  tax_glom(taxrank="Genus") %>%
-  psmelt() %>%
-  group_by(Sample.Name) %>%
-  mutate(`Relative Abundance`=Abundance/sum(Abundance), .after=Abundance) %>%
-  ungroup() %>%
-  write_csv("for_paper/Genus_Condition.csv")
-
-
+lapply(setNames(rank_names(physeq), rank_names(physeq))[2:6],
+       function(trank) {
+         agg_mice %>%
+           tax_glom(taxrank=trank) %>%
+           psmelt() %>%
+           group_by(Sample.Name) %>%
+           mutate(`Relative Abundance`=Abundance/sum(Abundance), .after=Abundance) %>%
+           ungroup() %>%
+           write_csv(paste0("for_paper/", trank, "_Condition.csv")
+})
 
 
 ## Aggregate at each level
@@ -94,6 +83,14 @@ aggs <- lapply(setNames(rank_names(physeq), rank_names(physeq))[2:6],
                 obj
               }
               )
+
+pdf(file="for_paper/heatmaps.pdf")
+for (i in rank_names(physeq)[2:6]) {
+  for (j in c("Batch","group")) {
+    print(plot_heatmap(aggs[[i]], sample.order=j, sample.label=j, title=paste(i, "by", j)))
+  }
+}
+dev.off()
 
 contrs <- list(
   "Within Week" = expand.grid(Week=c(2,12), Treatment=c("glucose", "low_sucralose", "high_sucralose")),
