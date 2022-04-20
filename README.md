@@ -7,10 +7,10 @@ expected errors. Taxa and species assignment was carried out using
 v132 of the silva database.
 
 The processed data were then analysed in R 4.0.3 (ref 2) with the
-phyloseq package (ref 3). DESeq2 (v1.30, ref 4) was used to estimate
-the log-fold changes and p-values between experimental groups whilst
-accounting for an observed batch effect that crossed the experimental
-groups.
+phyloseq package (ref 3), aggregating the count data to the genus
+level. DESeq2 (v1.30, ref 4) was used to estimate the log-fold changes
+and p-values between experimental groups whilst accounting for an
+observed batch effect that crossed the experimental groups.
 
 ### References
 
